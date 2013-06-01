@@ -11,22 +11,71 @@ void algorithm(int *c, const int *a, const int *b, size_t size);
 
 int initTime = 0;
 
-__global__ void Bl1(int *X, int *A, int *B)
+/////////////////////////////////////////////////////////////////////////////////////////////
+//									CUDA KERNELS										   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+__global__ void Bl1(float *X_new, float *X_old, float **A, int j)
 {
-    int i = threadIdx.x;
-    X[i] = 100500;
+    int i = (j - 1) + threadIdx.x;
+    X_new[i] = X_new[i] - A[i][j]*X_old[j];
 }
 
-__global__ void Bl2(float **X, float **A, float *B)
+__global__ void Bl2(float *X_new, float **A, int t, int n)
+{
+	int j = fmax((int)1, (int)(t - n)) + threadIdx.x;
+	int i = t - j;
+	X_new[i] = X_new[i] - A[i][j]*X_new[j];
+}
+
+__global__ void helpBl(float *X, float *B)
 {
 	int i = threadIdx.x;
-	// c[i] = a[i] + b[i];
+	X[i] = B[i];
 }
 
-__global__ void helpBl(float **X, float **A, float *B)
+/////////////////////////////////////////////////////////////////////////////////////////////
+//									CUDA ZEIDEL ALGO									   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+void algorithm(const int &K, float **A, float *B, const size_t &size, float *X)
 {
+	float *X_new;
+	float *X_old;
 
+	cudaMalloc((void**)&X_new, size * sizeof(float));
+	cudaMalloc((void**)&X_old, size * sizeof(float));
+
+	cudaMemcpy(X_old, B, size * sizeof(float), cudaMemcpyDeviceToDevice);
+
+	for (int i = 0; i < K; ++i)
+	{
+		cudaMemcpy(X_new, B, size * sizeof(float), cudaMemcpyDeviceToDevice);
+
+		for (int j = 2; j < size; ++j)
+		{
+			int num = n - j;
+			Bl1<<<1, num>>>(X_new, X_old, A, j);
+		}
+
+		for (int t = 2; t < 2*size; ++t)
+		{
+			int num = 2 * size - 2;
+			Bl2<<<1, num>>>(X_new, A, t, size);
+		}
+
+		if ((t / 2) % 2 == 0)
+		{
+			// Multiply matrix by vector
+		}
+	}
+	
 }
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+//									CUDA TESTS  										   //
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 void TestFunc()
 {
@@ -47,6 +96,11 @@ void cudaSetInitTime(int t)
 {
 	initTime = t;
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+//									CUDA ROUTIN  										   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
 
 int cudaMain(const int &size, float &time, float *answer)
 {
@@ -84,11 +138,6 @@ int cudaMain(const int &size, float &time, float *answer)
 bool loadInput(char *path, float **A, float *B, int &size)
 {
 	return true;
-}
-
-void algorithm(int *c, int *a, int *b, size_t size)
-{
-	Bl1<<<1, size>>>(c, a, b);
 }
 
 // Helper function for using CUDA to add vectors in parallel.
