@@ -37,10 +37,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>E:\Programming\C++\Parallel_Dop_CUDA\Parallel_Dop_CUDA;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Parallel_Dop_CUDA;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LibraryPath>E:\Programming\C++\Parallel_Dop_CUDA\Debug;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
