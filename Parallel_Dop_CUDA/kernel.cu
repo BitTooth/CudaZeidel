@@ -6,12 +6,68 @@
 #include <stdio.h>
 #include "stdlib.h"
 
+#include "windows.h"
+
 #define V2D(i, j) (i) * size + (j)
 
 cudaError_t launchCuda(int *c, const int *a, const int *b, size_t size);
 void algorithm(int *c, const int *a, const int *b, size_t size);
 
+
+// Globals
+
 int initTime = 0;
+bool g_Bl1_GPU = true;
+bool g_Bl2_GPU = true;
+bool g_Bl3_GPU = true;
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+//									 CPU KERNELS										   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+__host__ void Bl1_CPU(float *X_new, float *X_old, float *A, int j, int size)
+{
+	float *h_X_new = (float*)malloc(size * sizeof(float));
+	float *h_X_old = (float*)malloc(size * sizeof(float));
+	float *h_A = (float*)malloc(size * size * sizeof(float));
+	cudaMemcpy(h_X_new, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_X_old, X_old, size * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_A, A, size * size * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = j - 1; i < size; ++i)
+	{
+		h_X_new[i] = h_X_new[i] - h_A[i * size + j]*h_X_old[j];
+	}
+
+	cudaMemcpy(X_new, h_X_new, size * sizeof(float), cudaMemcpyHostToDevice);
+	free(h_X_new);
+	free(h_X_old);
+	free(h_A);
+}
+
+__host__ void Bl2_CPU(float *X_new, float *A, int t, int size)
+{
+	float *h_X_new = (float*)malloc(size * sizeof(float));
+	float *h_A = (float*)malloc(size * size * sizeof(float));
+	cudaMemcpy(h_X_new, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_A, A, size * size * sizeof(float), cudaMemcpyDeviceToHost);
+
+	for (int j = max(1, t - size); j < (t - 1)/2; ++j)
+	{
+		int i = t - j - 1;
+		h_X_new[i] = h_X_new[i] - h_A[i * size + j]*h_X_new[j];
+	}
+
+	cudaMemcpy(X_new, h_X_new, size * sizeof(float), cudaMemcpyHostToDevice);
+	free(h_X_new);
+	free(h_A);
+}
+
+void helpBl_CPU(float *X, float *B)
+{
+	int i = 0;// threadIdx.x;
+	X[i] = B[i];
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 //									CUDA KERNELS										   //
@@ -65,30 +121,43 @@ cudaError_t algorithm(const int &K, float *A, float *B, const size_t &size, floa
 		{
 			int num = size - j;
 
-			cudaMemcpy(test, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(test1, X_old, size * sizeof(float), cudaMemcpyDeviceToHost);
-			Bl1<<<1, num>>>(X_new, X_old, A, j, size);
+			// cudaMemcpy(test, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
+			// cudaMemcpy(test1, X_old, size * sizeof(float), cudaMemcpyDeviceToHost);
 
-			
-			cudaStatus = cudaDeviceSynchronize();
-			if (cudaStatus != cudaSuccess) {
-				fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-				return cudaStatus;
+			if (g_Bl1_GPU)
+			{
+				Bl1<<<1, num>>>(X_new, X_old, A, j, size);
+				cudaStatus = cudaDeviceSynchronize();
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+					return cudaStatus;
+				}
+			}
+			else
+			{
+				Bl1_CPU(X_new, X_old, A, j, size);
 			}
 
-			cudaMemcpy(test, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(test1, X_old, size * sizeof(float), cudaMemcpyDeviceToHost);
+			// cudaMemcpy(test, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
+			// cudaMemcpy(test1, X_old, size * sizeof(float), cudaMemcpyDeviceToHost);
 		}
 
 		for (int t = 2; t < 2*size; ++t)
 		{
 			int num = 2 * size - 2;
-			Bl2<<<1, num>>>(X_new, A, t, size);
 
-			cudaStatus = cudaDeviceSynchronize();
-			if (cudaStatus != cudaSuccess) {
-				fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-				return cudaStatus;
+			if (g_Bl2_GPU)
+			{
+				Bl2<<<1, num>>>(X_new, A, t, size);
+				cudaStatus = cudaDeviceSynchronize();
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+					return cudaStatus;
+				}
+			}
+			else
+			{
+				Bl2_CPU(X_new, A, t, size);
 			}
 			
 			if ((t / 2) % 2 == 0)
@@ -139,6 +208,17 @@ void cudaSetInitTime(int t)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
+//									CUDA SETTINGS										   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+void setProcessingUnit(bool Bl1_GPU, bool Bl2_GPU, bool Bl3_GPU)
+{
+	g_Bl1_GPU = Bl1_GPU;
+	g_Bl2_GPU = Bl2_GPU;
+	g_Bl3_GPU = Bl3_GPU;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 //									CUDA ROUTIN  										   //
 /////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,8 +257,22 @@ cudaError_t launchCuda(const int &size, float &time, float *answer)
     // Launch algorithm
 	int K = 10;
 	printf("start\n");
+
+	__int64 startTime;
+	__int64 endTime;
+	QueryPerformanceCounter((LARGE_INTEGER*)&startTime);
+
     cudaStatus = algorithm(K, dev_a, dev_b, size, dev_x);
+
+	QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
 	printf("stop\n");
+
+	__int64 countsPerSec;
+	double secPerCount;
+	QueryPerformanceFrequency((LARGE_INTEGER*)&countsPerSec);
+	secPerCount = 1.0 / (double)countsPerSec;
+
+	time = (float)((endTime - startTime) * secPerCount);
 
     // Copy output vector from GPU buffer to host memory.
     cudaMemcpy(answer, dev_x, size * sizeof(float), cudaMemcpyDeviceToHost);

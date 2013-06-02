@@ -4,16 +4,19 @@ using namespace std;
 
 int main()
 {
-	int size = 1000;
+	int size = 10000;
 	float time;
 	float *answer = new float[size];
 
-	CudaStartZeidel(size, time, answer);
+	// SetProcessingUnit(false, false, false);
+	// 
+	// CudaStartZeidel(size, time, answer);
+	// cout<<"time on CPU: "<<time<<endl;
 
-	/*for (int i =0; i < size; ++i)
-	{
-		cout<<answer[i]<<endl;
-	}*/
+	SetProcessingUnit(true, true, true);
+
+	CudaStartZeidel(size, time, answer);
+	cout<<"time on GPU: "<<time<<endl;
 
 	system("PAUSE");
 }
