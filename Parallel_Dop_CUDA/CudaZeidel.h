@@ -1,5 +1,5 @@
 
-__declspec(dllexport) int CudaStartZeidel(const int &size, float &time, float *answer);
+__declspec(dllexport) int CudaStartZeidel(const int &size, const int& r, float &time, float *answer);
 __declspec(dllexport) int CudaTestZeidel(const int &size, float &time, float *answer);
 
 /// Setting processing unit for each block of algorithm.

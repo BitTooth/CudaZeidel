@@ -3,9 +3,9 @@
 using namespace std;
 
 
-__declspec(dllexport) int CudaStartZeidel(const int &size, float &time, float *answer)
+__declspec(dllexport) int CudaStartZeidel(const int &size, const int& r, float &time, float *answer)
 {
-	cudaMain(size, time, answer);
+	cudaMain(size, r, time, answer);
 	return 0;
 }
 
