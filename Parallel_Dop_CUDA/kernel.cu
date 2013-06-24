@@ -147,7 +147,7 @@ cudaError_t algorithm(const int &r, const int &K, float *A, float *B, const size
 			if (g_Bl2_GPU)
 			{
 				int num = ((t - 1) / 2) - max(1, t - n) + 1;
-				if (t < 3 || t == 2*n)
+				if (t < 3 || t == 2*n - 1)
 					continue;
 				if (num > 1024)
 					fprintf(stderr, "\n\t !Number of thread in block is greater than 1024(Block2)!\n");
