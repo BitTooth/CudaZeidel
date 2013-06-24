@@ -52,22 +52,21 @@ void helpBl_CPU(float *X, float *B)
 //									CUDA KERNELS										   //
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-__global__ void Bl1(float *X_new, float *X_old, float *A, int _j, int size)
+__global__ void Bl1(float *X_new, float *X_old, float *A, int _j, int size, int stride)
 {
 	int j = blockIdx.y * blockDim.y + _j;
     int i = blockIdx.x * blockDim.x + (_j - 1) + threadIdx.x;
-
-    X_new[i] = X_new[i] - A[i * size + j]*X_old[j];
+    X_new[i] = X_new[i] - A[i * stride + j]*X_old[j];
 }
 
-__global__ void Bl2(float *X_new, float *A, int t, int size)
+__global__ void Bl2(float *X_new, float *A, int t, int size, int stride)
 {
-	int j = ((t - size) < 0)? 1: (t - size);
-	j += blockIdx.y * blockDim.y + threadIdx.x;
+	int j = ((t - size) < 1)? 1: (t - size) + threadIdx.x;
 
 	int i = blockIdx.x * blockDim.x  + t - j;
+	j += blockIdx.y * blockDim.y;
 
-	X_new[i] = X_new[i] - A[i * size + j]*X_new[j];
+	X_new[i] = X_new[i] - A[i * stride + j]*X_new[j];
 }
 
 __global__ void helpBl(float *X, float *B)
@@ -125,7 +124,7 @@ cudaError_t algorithm(const int &r, const int &K, float *A, float *B, const size
 				if (num > 1024)
 					fprintf(stderr, "\n\t !Number of thread in block is greater than 1024 (Block1)!\n");
 				dim3 numBlocks(r, r);
-				Bl1<<<numBlocks, num>>>(X_new, X_old, A, j, n);
+				Bl1<<<numBlocks, num>>>(X_new, X_old, A, j, n, size);
 				cudaStatus = cudaDeviceSynchronize();
 				if (cudaStatus != cudaSuccess) {
 					fprintf(stderr, "\n !cudaDeviceSynchronize returned error code %d after launching Block1!\n");
@@ -143,18 +142,20 @@ cudaError_t algorithm(const int &r, const int &K, float *A, float *B, const size
 
 		n = size / ((g_Bl2_GPU)?r:1);
 
-		for (int t = 1; t < 2*n; ++t)
+		for (int t = 2; t < 2*n; ++t)
 		{
 			if (g_Bl2_GPU)
 			{
-				int num = ((t - 1) / 2) - max(1, t - n);
+				int num = ((t - 1) / 2) - max(1, t - n) + 1;
+				if (t < 3 || t == 2*n)
+					continue;
 				if (num > 1024)
-					fprintf(stderr, "\n\t !Number of thread in block is greater than 1024(Block2)!\n", cudaStatus);
-			//	if (num < 0)
-			//		fprintf(stderr, "\n\t !Number of thread in block is less than 1(Block2)!\n", cudaStatus);
+					fprintf(stderr, "\n\t !Number of thread in block is greater than 1024(Block2)!\n");
+				if (num < 0)
+					fprintf(stderr, "\n\t !Number of thread in block is less than 1(Block2)! t = %d\n", t);
 
 				dim3 numBlocks(r, r);
-				Bl2<<<numBlocks, num>>>(X_new, A, t, n);
+				Bl2<<<numBlocks, num>>>(X_new, A, t, n, size);
 				cudaStatus = cudaDeviceSynchronize();
 				if (cudaStatus != cudaSuccess) {
 					fprintf(stderr, "\n\t !cudaDeviceSynchronize returned error code %d after launching Block2!\n", cudaStatus);
