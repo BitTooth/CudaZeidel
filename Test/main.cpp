@@ -27,14 +27,14 @@ int main()
 	// cout<<"time on CPU: "<<time<<endl;
 	// delete [] answer;
 
-	size = 10000;
+	size = 5000;
 	answer = new float[size];
 	SetProcessingUnit(true, true, true);
 	CudaStartZeidel(size, 100, time, answer);
 	cout<<"time on GPU: "<<time<<endl;
 	delete [] answer;
 
-	size = 10000;
+	size = 1000;
 	answer = new float[size];
 	SetProcessingUnit(false, false, false);
 	CudaStartZeidel(size, 100, time, answer);

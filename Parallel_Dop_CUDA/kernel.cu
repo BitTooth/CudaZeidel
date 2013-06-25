@@ -7,6 +7,8 @@
 #include "stdlib.h"
 
 #include "windows.h"
+#include "GPUMatrix.h"
+#include <math.h>
 
 #define V2D(i, j) (i) * size + (j)
 
@@ -20,6 +22,9 @@ int initTime = 0;
 bool g_Bl1_GPU = true;
 bool g_Bl2_GPU = true;
 bool g_Bl3_GPU = true;
+
+
+int (*pInverse)(float*, float*, int, int);
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 //									 CPU KERNELS										   //
@@ -82,7 +87,7 @@ __global__ void helpBl(float *X, float *B)
 /// K - number of iterations
 /// A, B, X - parts of linear system
 /// size - size of system
-cudaError_t algorithm(const int &r, const int &K, float *A, float *B, const size_t &size, float *X)
+cudaError_t algorithm(const int &r, const int &K, float *A, float *A_inv, float *B, const size_t &size, float *X)
 {
 	cudaError_t cudaStatus;
 	float *X_new;
@@ -182,17 +187,35 @@ cudaError_t algorithm(const int &r, const int &K, float *A, float *B, const size
 	cudaMemcpy(X, X_new, size * sizeof(float), cudaMemcpyDeviceToDevice);
 }
 
+inline float randf(float min, float max)
+{
+	return min + (float)rand()/((float)RAND_MAX/(max-min));
+}
+
 void GenerateEquation(const int &size, float *A, float *B)
 {
-	for (int i = 0; i < size; ++i)
+	float min = -1000.f;
+	float max = 1000.f;
+	
+	srand((unsigned)time(0));
+	for(int i = 0; i < size; ++i)
 	{
-		for (int j = 0; j < size; ++j)
+		float absSum = 0.f;
+		
+		for(int j = 0; j < size; ++j)
 		{
-			float random = ((i != j)? RAND_MAX * 100 : 100);
-			A[i * size + j] = (float)rand() / random;
+			A[i*size + j] = randf(min, max);
+			absSum += fabsf(A[i*size + j]);
 		}
 
-		B[i] = (float)rand() / (float)(RAND_MAX / size);
+		absSum -= fabsf(A[i*size + i]);
+		A[i*size + i] = absSum + randf(5.f, max);
+		if(randf(0.f, 1.f) < 0.5f)
+		{
+			A[i*size + i] *= -1.f;
+		}
+
+		B[i] = randf(min, max);
 	}
 }
 
@@ -236,11 +259,17 @@ void setProcessingUnit(bool Bl1_GPU, bool Bl2_GPU, bool Bl3_GPU)
 cudaError_t launchCuda(const int &size, const int &r, float &time, float *answer)
 {
     float *dev_a = 0;
+	float *dev_a_inv = 0;
     float *dev_b = 0;
     float *dev_x = 0;
 
 	float *A = (float*)(malloc(size * size * sizeof(float)));
+	float *A_inv = (float*)(malloc(size * size * sizeof(float)));
 	float *B = (float*)(malloc(size * sizeof(float)));
+
+	GenerateEquation(size, A, B);
+	GPUInverse(A, A_inv, size);
+
 
     cudaError_t cudaStatus;
 
@@ -253,15 +282,13 @@ cudaError_t launchCuda(const int &size, const int &r, float &time, float *answer
 
     // Allocate GPU buffers for three vectors (two input, one output)
     cudaStatus = cudaMalloc((void**)&dev_a, size * size * sizeof(float));
+	cudaStatus = cudaMalloc((void**)&dev_a_inv, size * size * sizeof(float));
 	cudaStatus = cudaMalloc((void**)&dev_b, size * sizeof(float));
     cudaStatus = cudaMalloc((void**)&dev_x, size * sizeof(float));
-
-
-	// Generate matrix for algorithm
-	GenerateEquation(size, A, B);
-
+	
     // Copy input vectors from host memory to GPU buffers.
     cudaStatus = cudaMemcpy(dev_a, A, size * size * sizeof(float),	cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(dev_a_inv, A_inv, size * size * sizeof(float),	cudaMemcpyHostToDevice);
     cudaStatus = cudaMemcpy(dev_b, B, size * sizeof(float),			cudaMemcpyHostToDevice);
 
     // Launch algorithm
@@ -272,7 +299,7 @@ cudaError_t launchCuda(const int &size, const int &r, float &time, float *answer
 	__int64 endTime;
 	QueryPerformanceCounter((LARGE_INTEGER*)&startTime);
 
-    cudaStatus = algorithm(r, K, dev_a, dev_b, size, dev_x);
+    cudaStatus = algorithm(r, K, dev_a, dev_a_inv, dev_b, size, dev_x);
 
 	QueryPerformanceCounter((LARGE_INTEGER*)&endTime);
 	printf("stop\n");

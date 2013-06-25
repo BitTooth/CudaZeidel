@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CudaZeidel.h" />
+    <ClInclude Include="GPUMatrix.h" />
+    <ClInclude Include="main.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="Kernels\normalizeRow_kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Kernels\pass_kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Kernels\setIdentity_kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Kernels\validateRows_kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Kernels\swapRows_kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="MatrixLib.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Kernels">
+      <UniqueIdentifier>{18e162c5-4e39-4bb8-ad8b-ae1e0b15d10e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
