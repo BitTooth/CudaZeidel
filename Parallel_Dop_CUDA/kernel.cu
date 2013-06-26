@@ -11,6 +11,7 @@
 #include <math.h>
 
 #define V2D(i, j) (i) * size + (j)
+#define BLOCK_SIZE 256
 
 cudaError_t launchCuda(int *c, const int *a, const int *b, size_t size);
 void algorithm(int *c, const int *a, const int *b, size_t size);
@@ -78,6 +79,29 @@ __global__ void helpBl(float *X, float *B)
 {
 	int i = threadIdx.x;
 	X[i] = B[i];
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+//							CUDA MATRIX-VECTOR MULTIPLICATION							   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+__global__ void MVKernel_gm(float* A, float* X, float* Y, int size)
+{
+	int bx = blockIdx.x; 
+	int tx = threadIdx.x; 
+	int Row = bx * blockDim.x + tx;
+	float Pvalue = 0;
+   
+	for (unsigned int k = 0; k < size; k++) 
+		{
+			if(Row < size)         
+			Pvalue += A[Row * size + k] * X[k];		
+		}
+	
+	__syncthreads();
+	
+	if(Row < size)  		
+	  Y[Row] = Pvalue;
+	__syncthreads();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,6 +199,15 @@ cudaError_t algorithm(const int &r, const int &K, float *A, float *A_inv, float 
 			if ((t / 2) % 2 == 0)
 			{
 				// Multiply matrix by vector
+				if (!g_Bl2_GPU)
+					cudaMemcpy(X_new, h_X_new, size * sizeof(float), cudaMemcpyHostToDevice);
+
+				dim3 dimGrid((size - 1) / BLOCK_SIZE + 1);
+				dim3 dimBlock(BLOCK_SIZE);
+				MVKernel_gm<<<dimGrid,dimBlock>>>(A, X_new, X_new, size);
+
+				if (!g_Bl2_GPU)
+					cudaMemcpy(h_X_new, X_new, size * sizeof(float), cudaMemcpyDeviceToHost);
 			}
 		}
 
@@ -316,8 +349,10 @@ cudaError_t launchCuda(const int &size, const int &r, float &time, float *answer
 
 Error:
 	free(A);
+	free(A_inv);
 	free(B);
     cudaFree(dev_x);
+	cudaFree(dev_a_inv);
     cudaFree(dev_a);
     cudaFree(dev_b);
     

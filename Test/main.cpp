@@ -27,7 +27,7 @@ int main()
 	// cout<<"time on CPU: "<<time<<endl;
 	// delete [] answer;
 
-	size = 5000;
+	size = 1000;
 	answer = new float[size];
 	SetProcessingUnit(true, true, true);
 	CudaStartZeidel(size, 100, time, answer);
